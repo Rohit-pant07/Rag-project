@@ -1,0 +1,11 @@
+Hello there! I'd be happy to help you with enabling and disabling video controls. It seems like there's a lot of information about playing, muting, and controlling videos, but I want to guide you through the most relevant parts.
+
+To enable or disable video controls, let's focus on two key topics:
+
+1. **Muting**: You can mute a video by toggling the screencast mode or removing the auto-play feature. According to the video, muting makes the video silent and helps prevent audio from getting mixed with other sounds.
+
+At 15:36, you'll see "How to keep muted video" mentioned. It's also at 10:52 where it says "How to play video in an HTML file?"
+
+2. **Disabling Controls**: If you want to disable the controls, like play or pause buttons, make sure you have a video playing first. The video says that if you have a video and write with controls, then you won't see audio.
+
+At 19:84, it mentions "Ads, video controls like play, pause and volume." However, this seems to be more about ads rather than disabling controls.
