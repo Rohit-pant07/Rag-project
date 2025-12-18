@@ -289,7 +289,6 @@ python process_incoming.py
   - Refactor `process_incoming.py` into modular functions
   - Remove unreachable/debug code
   - Add logging instead of print statements
-  - Create `requirements.txt` with pinned versions
 
 - **User Experience**
   - Add CLI flags for query input
@@ -342,6 +341,3 @@ python process_incoming.py
 
 ---
 
-## License
-
-[Add license information if applicable]
