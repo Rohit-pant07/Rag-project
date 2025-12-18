@@ -1,59 +1,131 @@
-## RAG Project – Video Course QA Assistant
+# RAG Project – Video Course QA Assistant
 
-This project builds a simple Retrieval-Augmented Generation (RAG) pipeline on top of a video course.  
-It lets you ask natural language questions (e.g. *“Where is CSS taught in this course?”*) and returns:
+## Brief Summary
 
-- **Which video(s)** contain the answer  
-- **Approximate timestamps** where the topic is discussed  
-- **A concise explanation** phrased like a helpful teaching assistant
+A **Retrieval-Augmented Generation (RAG) pipeline** that enables natural language Q&A over video course content. The system extracts audio from videos, transcribes speech, creates searchable embeddings, and uses similarity search with an LLM to answer questions about course content—including which videos contain answers and approximate timestamps.
 
-Under the hood, it:
+---
 
-- Extracts audio from course videos
-- Transcribes and chunks the speech
-- Embeds chunks with an embedding model
-- Uses similarity search to find the most relevant chunks
-- Sends a context-aware prompt to a local LLM (via Ollama) to generate the final answer
+## Detailed Overview
+
+### What It Does
+
+This project builds an intelligent Q&A assistant for video-based courses that:
+
+- **Processes video content**: Converts course videos to audio, transcribes them, and creates searchable text chunks
+- **Enables semantic search**: Uses embedding vectors to find relevant content based on meaning, not just keywords
+- **Generates contextual answers**: Combines retrieved video chunks with an LLM to provide:
+  - Which video(s) contain the answer
+  - Exact timestamps (start–end) where topics are discussed
+  - Concise explanations in a teaching assistant style
+
+### Architecture & Pipeline
+
+The system follows a **4-stage pipeline**:
+
+1. **Video → Audio Extraction** (`vid_to_mp3.py`)
+   - Extracts audio from `.webm` videos using `ffmpeg`
+   - Parses tutorial numbers and titles from filenames
+   - Outputs `.mp3` files to `audios/` directory
+
+2. **Audio → Text Transcription** (`mp3_to_json.py`)
+   - Uses OpenAI Whisper (`small` model) for speech-to-text
+   - Translates Hindi audio to English (`language="hi"`, `task="translate"`)
+   - Creates timestamped chunks with metadata (number, title, start, end, text)
+   - Saves JSON files to `chunks/` directory
+
+3. **Chunk Merging** (`merge_chunks.py`)
+   - Merges 5 consecutive chunks into larger segments
+   - Preserves timestamps (start from first chunk, end from last chunk)
+   - Combines text content for better context
+   - Outputs merged chunks to `merged_chunks/` directory
+
+4. **Embedding Generation** (`json_to_embeddings.py`)
+   - Generates embeddings for all merged chunks using Ollama's `bge-m3` model
+   - Assigns unique IDs to each chunk
+   - Stores embeddings and metadata in a Pandas DataFrame
+   - Saves as `embedded_chunks.joblib` for fast retrieval
+
+5. **Query Processing** (`process_incoming.py`)
+   - Loads precomputed embeddings from `embedded_chunks.joblib`
+   - Embeds user query using `bge-m3`
+   - Computes cosine similarity to find top 30 most relevant chunks
+   - Builds context-aware prompt with retrieved chunks
+   - Generates answer using Ollama's `llama3.2` model
+   - Saves response to `response.txt`
 
 ---
 
 ## Project Structure
 
-- **`videos_rag/`**: Original course videos (`.webm`)
-- **`audios/`**: Extracted audio files (`.mp3`) generated from videos
-- **`chunks/`**: JSON files with transcribed and chunked text, along with timestamps
-- **`embedded_chunks.joblib`**: Precomputed embeddings and metadata for all chunks (Pandas DataFrame stored with `joblib`)
-- **`vid_to_mp3.py`**: Converts videos in `videos_rag/` to `.mp3` files in `audios/`
-- **`mp3_to_json.py`**: Uses Whisper to transcribe each audio file, producing chunked JSON in `chunks/`
-- **`json_to_embeddings.py`**: Reads all JSON chunk files, generates embeddings via Ollama, and saves `embedded_chunks.joblib`
-- **`process_incoming.py`**: Main query script – takes a user question, retrieves similar chunks, builds a prompt, calls the LLM, and writes the answer to `response.txt`
-- **`prompt.txt`**: Example prompt content / debug artifact
-- **`response.txt`**: Example model answer for a previous query
+```
+rag_project/
+├── videos_rag/              # Original course videos (.webm)
+├── audios/                  # Extracted audio files (.mp3)
+├── chunks/                  # Transcribed chunks (JSON files)
+├── merged_chunks/           # Merged chunks (5 chunks per merged chunk)
+├── embedded_chunks.joblib   # Precomputed embeddings (DataFrame)
+│
+├── vid_to_mp3.py           # Video → Audio extraction
+├── mp3_to_json.py          # Audio → Text transcription
+├── merge_chunks.py         # Chunk merging (5 chunks → 1)
+├── json_to_embeddings.py   # Generate embeddings & save index
+├── process_incoming.py     # Main Q&A query script
+│
+├── prompt.txt              # Example prompt (debug artifact)
+└── response.txt            # Generated answer output
+```
 
 ---
 
-## Data and Naming Conventions
+## Data Format
 
-- Videos in `videos_rag/` are expected to follow the pattern used by the Sigma Web Dev Course, e.g.:  
-  `Your First HTML Website ｜ Sigma Web Development Course - Tutorial #2 [kJEsTjH5mVg].webm`
-- `vid_to_mp3.py` turns each video into an audio file in `audios/` named like:  
-  `2_YourFirstHTMLWebsite.mp3`
-- `mp3_to_json.py` then creates corresponding JSONs in `chunks/` named like:  
-  `2_YourFirstHTMLWebsite.json`
+### Chunk Structure (chunks/)
 
-Each chunk in the JSON has:
+Each JSON file contains:
+```json
+{
+  "chunks": [
+    {
+      "number": "2",
+      "title": "YourFirstHTMLWebsite",
+      "start": 0.0,
+      "end": 2.64,
+      "text": "Transcribed text segment..."
+    }
+  ],
+  "fulltext": "Complete transcription..."
+}
+```
 
-- **`number`**: tutorial number (as a string)
-- **`title`**: a compact title (e.g. `YourFirstHTMLWebsite`)
-- **`start` / `end`**: timestamps (in seconds) within the video
-- **`text`**: transcribed text segment
+### Merged Chunk Structure (merged_chunks/)
 
-`json_to_embeddings.py` adds:
+Merged chunks combine 5 consecutive chunks:
+```json
+{
+  "chunks": [
+    {
+      "number": "2",
+      "title": "YourFirstHTMLWebsite",
+      "start": 0.0,
+      "end": 10.8,
+      "text": "Combined text from 5 chunks..."
+    }
+  ],
+  "fulltext": "Complete transcription..."
+}
+```
 
-- **`id`**: a running chunk ID
-- **`embedding`**: embedding vector for that chunk (from the `bge-m3` model)
+### Embedded Chunks (embedded_chunks.joblib)
 
-All of this is stored in `embedded_chunks.joblib` as a DataFrame used by `process_incoming.py`.
+Pandas DataFrame with columns:
+- `id`: Unique chunk identifier
+- `number`: Tutorial number
+- `title`: Video title
+- `start`: Start timestamp (seconds)
+- `end`: End timestamp (seconds)
+- `text`: Chunk text content
+- `embedding`: Embedding vector (from `bge-m3`)
 
 ---
 
@@ -61,152 +133,215 @@ All of this is stored in `embedded_chunks.joblib` as a DataFrame used by `proces
 
 ### System Dependencies
 
-- **Python 3.9+** (recommended)
-- **ffmpeg** (needed by `vid_to_mp3.py` to extract audio)
-- **Ollama** (running locally with models):
-  - Embedding model: **`bge-m3`**
-  - LLM model: **`llama3.2`** (or another compatible chat model)
-
-Make sure `ffmpeg` is on your `PATH`, and Ollama is running and accessible at  
-`http://localhost:11434/`.
+- **Python 3.9+**
+- **ffmpeg** (for video-to-audio conversion)
+- **Ollama** (running locally at `http://localhost:11434/`)
+  - Embedding model: `bge-m3`
+  - LLM model: `llama3.2`
 
 ### Python Packages
-
-Install the required Python libraries (you can use a virtual environment):
 
 ```bash
 pip install requests pandas numpy scikit-learn joblib openai-whisper
 ```
 
-> **Note**: `openai-whisper` may require additional system packages (like `ffmpeg` and PyTorch) depending on your environment.
+**Note**: `openai-whisper` requires additional system dependencies (ffmpeg, PyTorch) depending on your environment.
 
 ---
 
-## End-to-End Pipeline
+## Usage
 
-### 1. Convert Videos to MP3 – `vid_to_mp3.py`
+### Step 1: Extract Audio from Videos
 
-Place your `.webm` (or compatible) videos in `videos_rag/` following the Sigma naming style.  
-Then run:
+Place `.webm` videos in `videos_rag/` following the naming pattern:
+```
+Your First HTML Website ｜ Sigma Web Development Course - Tutorial #2 [kJEsTjH5mVg].webm
+```
 
+Run:
 ```bash
 python vid_to_mp3.py
 ```
 
-This will:
+**What it does**:
+- Parses tutorial number from filename (e.g., `#2`)
+- Extracts title (e.g., `Your First HTML Website`)
+- Converts to `audios/2_YourFirstHTMLWebsite.mp3`
 
-- Iterate through all files in `videos_rag/`
-- Derive a tutorial number and a compact title from the filename
-- Call `ffmpeg` to create audio files in `audios/` as `<number>_<Title>.mp3`
-
-### 2. Transcribe Audio and Create Chunks – `mp3_to_json.py`
-
-This step uses Whisper to transcribe each `.mp3` and create JSON chunks with timestamps:
+### Step 2: Transcribe Audio to Text
 
 ```bash
 python mp3_to_json.py
 ```
 
-What it does:
+**What it does**:
+- Loads Whisper `small` model
+- Transcribes each `.mp3` file (translates Hindi → English)
+- Creates timestamped chunks
+- Saves to `chunks/<number>_<Title>.json`
 
-- Loads the Whisper **`small`** model
-- For each audio in `audios/`:
-  - Transcribes and (optionally) translates (`language="hi"`, `task="translate"` in the current code)
-  - Builds a list of segments with `number`, `title`, `start`, `end`, and `text`
-  - Saves them into `chunks/<number>_<Title>.json`
+### Step 3: Merge Chunks
 
-### 3. Generate Embeddings – `json_to_embeddings.py`
+```bash
+python merge_chunks.py
+```
 
-Before running this step, ensure:
+**What it does**:
+- Reads all JSON files from `chunks/`
+- Merges 5 consecutive chunks into larger segments
+- Preserves start/end timestamps
+- Saves merged chunks to `merged_chunks/`
 
-- Ollama is running
-- The **`bge-m3`** embedding model is available and pulled
+### Step 4: Generate Embeddings
 
-Then run:
+Ensure Ollama is running and `bge-m3` model is available:
 
 ```bash
 python json_to_embeddings.py
 ```
 
-What it does:
+**What it does**:
+- Loads all merged chunk JSON files
+- Generates embeddings via Ollama `/api/embed` endpoint
+- Creates DataFrame with embeddings and metadata
+- Saves to `embedded_chunks.joblib`
 
-- Lists all JSON files in `chunks/`
-- For each file:
-  - Loads `chunks` from JSON
-  - Calls the Ollama `/api/embed` endpoint with `model="bge-m3"` on the text of each chunk
-  - Attaches the resulting embedding vectors and a unique `id` to each chunk
-- Aggregates everything into a Pandas DataFrame and saves it as `embedded_chunks.joblib`
-
-### 4. Ask Questions – `process_incoming.py`
-
-Finally, you can query the course content:
+### Step 5: Query the Course
 
 ```bash
 python process_incoming.py
 ```
 
-This script:
-
-- Loads `embedded_chunks.joblib` into a DataFrame
-- Prompts you for a question via `input()`
-- Uses `/api/embed` to embed your query with `bge-m3`
-- Computes cosine similarity between the query and all chunk embeddings
-- Takes the **top 30** most similar chunks
-- Builds a prompt that:
-  - Includes your question
-  - Includes those top chunks as JSON with `number`, `title`, `text`, `start`, `end`
-  - Instructs the model to:
-    - Answer only based on these chunks
-    - Mention **which video** and **approximate timestamps**
-    - Sound like a friendly teaching assistant
-    - Apologize and say it doesn’t know if no relevant info is found
-- Sends this prompt to Ollama `/api/generate` with `model="llama3.2"` and saves the final answer to `response.txt`
+**What it does**:
+- Prompts for user question
+- Embeds query using `bge-m3`
+- Finds top 30 most similar chunks (cosine similarity)
+- Builds prompt with:
+  - User question
+  - Top 30 chunks (number, title, text, start, end)
+  - Instructions for LLM to answer based on chunks only
+- Generates answer using `llama3.2`
+- Saves response to `response.txt`
 
 ---
 
-## What Could Be Improved (Suggested Changes)
+## Key Features
 
-These are not yet implemented, but are recommended next steps:
-
-- **Configuration & Paths**
-  - Externalize model names, host URLs, and folder paths to a config file or environment variables.
-  - Add checks to ensure folders like `videos_rag/`, `audios/`, `chunks/` and `embedded_chunks.joblib` exist before running.
-
-- **`vid_to_mp3.py`**
-  - Guard against files that don’t match the expected naming pattern (currently assumes `#` is present).
-  - Consider skipping non-video files or logging them clearly instead of failing.
-
-- **`mp3_to_json.py`**
-  - Make language (`language="hi"`) and `task` (`"translate"`) configurable.
-  - Add error handling around Whisper transcription (e.g. skip problematic files but continue others).
-
-- **`json_to_embeddings.py`**
-  - Add basic retry / error handling around the embedding API call.
-  - Optionally process files in batches or show progress indicators for large datasets.
-
-- **`process_incoming.py`**
-  - Refactor into functions (e.g. `load_index()`, `embed_query()`, `retrieve_top_k()`, `build_prompt()`, `generate_answer()`).
-  - Remove unreachable code (e.g. `print("Inference Response:", r.json())` after `return`).
-  - Add CLI flags or a simple API instead of relying solely on `input()`.
-  - Improve prompt wording / grammar slightly and make the template easy to edit (e.g. store in a separate file).
-
-- **General**
-  - Add a `requirements.txt` (or `pyproject.toml`) to pin dependencies.
-  - Add simple logging instead of just `print` statements.
-  - Optionally introduce tests for small pieces (e.g. filename parsing, similarity ranking).
+- **Semantic Search**: Uses embedding-based similarity search instead of keyword matching
+- **Timestamped Answers**: Provides exact video timestamps where topics are discussed
+- **Context-Aware**: Retrieves top 30 relevant chunks for comprehensive context
+- **Teaching Assistant Style**: Generates friendly, educational responses
+- **Local Processing**: Uses local Ollama models (no external API keys required)
 
 ---
 
-## How to Use This Repo
+## Technical Details
 
-1. **Install system dependencies** (`ffmpeg`, Ollama, Python).  
-2. **Install Python packages** with `pip install ...` as shown above.  
-3. **Place videos** in `videos_rag/`.  
-4. Run, in order:
-   - `python vid_to_mp3.py`
-   - `python mp3_to_json.py`
-   - `python json_to_embeddings.py`
-   - `python process_incoming.py`
-5. Type your question when prompted and then read the answer in `response.txt`.
+### Embedding Model
+- **Model**: `bge-m3` (via Ollama)
+- **Purpose**: Converts text chunks and queries into dense vector representations
+- **Similarity Metric**: Cosine similarity
 
-You now have a minimal but functional RAG assistant specialized to your video course.
+### LLM Model
+- **Model**: `llama3.2` (via Ollama)
+- **Purpose**: Generates natural language answers from retrieved chunks
+- **Prompt Strategy**: Includes retrieved chunks as context with strict instructions to answer only from provided content
+
+### Chunk Merging Strategy
+- **Merge Size**: 5 consecutive chunks per merged chunk
+- **Rationale**: Provides better context for embedding while maintaining reasonable granularity
+- **Timestamp Preservation**: Start time from first chunk, end time from last chunk
+
+### Retrieval Strategy
+- **Top-K**: Retrieves top 30 most similar chunks
+- **Similarity Threshold**: None (always returns top 30)
+- **Ranking**: Cosine similarity between query embedding and chunk embeddings
+
+---
+
+## Limitations & Future Improvements
+
+### Current Limitations
+
+- **Hardcoded Parameters**: Model names, paths, and merge size are hardcoded
+- **No Error Handling**: Limited error handling for API calls and file operations
+- **Single Language**: Currently configured for Hindi-to-English translation only
+- **No Progress Indicators**: No progress bars for long-running operations
+- **Unreachable Code**: Some debug code remains in `process_incoming.py`
+
+### Suggested Improvements
+
+- **Configuration Management**
+  - Externalize model names, URLs, and paths to config file or environment variables
+  - Add validation for required directories and files
+
+- **Error Handling**
+  - Add retry logic for API calls
+  - Handle missing files gracefully
+  - Skip problematic files and continue processing
+
+- **Flexibility**
+  - Make language and translation task configurable
+  - Support multiple video formats
+  - Allow configurable merge size and top-K retrieval
+
+- **Code Quality**
+  - Refactor `process_incoming.py` into modular functions
+  - Remove unreachable/debug code
+  - Add logging instead of print statements
+  - Create `requirements.txt` with pinned versions
+
+- **User Experience**
+  - Add CLI flags for query input
+  - Create simple API endpoint
+  - Add progress indicators for long operations
+  - Improve prompt template (store in separate file)
+
+- **Testing**
+  - Add unit tests for filename parsing
+  - Test similarity ranking logic
+  - Validate chunk merging correctness
+
+---
+
+## Example Workflow
+
+1. **Setup**:
+   ```bash
+   # Install dependencies
+   pip install requests pandas numpy scikit-learn joblib openai-whisper
+   
+   # Ensure Ollama is running with models
+   ollama pull bge-m3
+   ollama pull llama3.2
+   ```
+
+2. **Process Videos**:
+   ```bash
+   python vid_to_mp3.py          # Extract audio
+   python mp3_to_json.py         # Transcribe
+   python merge_chunks.py        # Merge chunks
+   python json_to_embeddings.py  # Generate embeddings
+   ```
+
+3. **Query**:
+   ```bash
+   python process_incoming.py
+   # Enter: "Where is CSS taught in this course?"
+   # Check response.txt for answer
+   ```
+
+---
+
+## Notes
+
+- **Naming Convention**: Videos must follow the pattern with `#` for tutorial number extraction
+- **Whisper Translation**: Currently configured to translate Hindi audio to English
+- **Local Models**: Requires Ollama running locally; no cloud API dependencies
+- **Storage**: `embedded_chunks.joblib` contains the complete searchable index
+
+---
+
+## License
+
+[Add license information if applicable]
