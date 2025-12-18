@@ -1,11 +1,10 @@
-Hello there! I'd be happy to help you with enabling and disabling video controls. It seems like there's a lot of information about playing, muting, and controlling videos, but I want to guide you through the most relevant parts.
+I'd be happy to help you understand where CSS is taught in this course!
 
-To enable or disable video controls, let's focus on two key topics:
+It seems like CSS is mentioned several times throughout the video. Here are some specific timestamps and recommendations:
 
-1. **Muting**: You can mute a video by toggling the screencast mode or removing the auto-play feature. According to the video, muting makes the video silent and helps prevent audio from getting mixed with other sounds.
+* Start watching from 45.4 seconds (0:00) - In this part, I mention that with HTML and JavaScript, we'll focus on making websites, including CSS.
+* At around 801.4 seconds (13:01), I say "This is how the CSS works." - This might be a good starting point to understand CSS basics.
+* From 841.4 seconds (13:41) onwards, I explain CSS syntax and example code. This part should give you an idea of how CSS works.
+* You can also check from 1331.4 seconds (21:31), where I mention that in this course, we'll tell you about elements, including CSS.
 
-At 15:36, you'll see "How to keep muted video" mentioned. It's also at 10:52 where it says "How to play video in an HTML file?"
-
-2. **Disabling Controls**: If you want to disable the controls, like play or pause buttons, make sure you have a video playing first. The video says that if you have a video and write with controls, then you won't see audio.
-
-At 19:84, it mentions "Ads, video controls like play, pause and volume." However, this seems to be more about ads rather than disabling controls.
+I recommend watching these parts to get a good understanding of CSS in the context of this course.
