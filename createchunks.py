@@ -1,14 +1,14 @@
 import whisper
 import os
 import json
-model = whisper.load_model("tiny")
+model = whisper.load_model("small")
 audios=os.listdir("audios")
 
 for audio in audios:
     number=audio.split("_")[0]
     title=audio.split("_")[1][:-4]
     print(number,title)
-    result = model.transcribe(audio=f"audios\{audio}")
+    result = model.transcribe(audio=f"audios/{audio}",language="hi",task='translate',word_timestamps=False)
     print(result)
 
     chunks=[]
@@ -24,4 +24,4 @@ for audio in audios:
     os.makedirs("chunks", exist_ok=True)
 
     with open(f"chunks/{number}_{title}.json","w") as f:
-        json.dump(chunkswithetxt,f)
+        json.dump(chunkswithetxt,f)     
